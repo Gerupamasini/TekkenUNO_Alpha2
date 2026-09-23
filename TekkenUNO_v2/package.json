@@ -1,0 +1,24 @@
+{
+  "name": "tekken-uno",
+  "version": "2.0.0",
+  "private": true,
+  "description": "鉄研UNOオンライン（ドボンUNO）",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node dist/server.js",
+    "dev": "node scripts/dev.mjs",
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.18",
+    "esbuild": "^0.27.7",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
