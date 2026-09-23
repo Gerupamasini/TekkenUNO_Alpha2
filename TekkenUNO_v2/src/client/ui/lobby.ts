@@ -1,10 +1,11 @@
 // ロビー：参加者・観戦者の一覧、START、キック、成績
 import { MAX_PLAYERS, type MemberView } from "../../shared/protocol.js";
-import { h, keyed, replace, show, text } from "../dom.js";
+import { h, keyed, show, text } from "../dom.js";
 import { send } from "../net.js";
 import { S, isHost } from "../store.js";
 import { confirmBox } from "./common.js";
-import { statsTable } from "./stats.js";
+import { statsView } from "./stats.js";
+import { versionFoot } from "./version.js";
 
 let root: HTMLElement | null = null;
 let playersEl: HTMLElement;
@@ -14,8 +15,7 @@ let specsTitle: HTMLElement;
 let startBtn: HTMLButtonElement;
 let waitEl: HTMLElement;
 let roleBtn: HTMLButtonElement;
-let statsBox: HTMLElement;
-let statsSig = "";
+let stats: ReturnType<typeof statsView>;
 
 /** キックの確認。キックは入室禁止ではない（合言葉を入れ直せば戻れる） */
 export async function confirmKick(target: MemberView) {
@@ -65,7 +65,7 @@ export function mountLobby(): HTMLElement {
   roleBtn.addEventListener("click", () => {
     send({ t: "role", spectate: S.view?.role === "player" });
   });
-  statsBox = h("div", { class: "stats-box" });
+  stats = statsView();
   root = h(
     "section",
     { class: "lobby" },
@@ -80,7 +80,7 @@ export function mountLobby(): HTMLElement {
       h("div", { class: "row wrap" }, startBtn, roleBtn),
       waitEl,
     ),
-    h("div", { class: "panel" }, h("h2", null, "成績（このルーム）"), statsBox),
+    h("div", { class: "panel" }, h("h2", null, "成績（このルーム）"), stats.el),
     h(
       "div",
       { class: "panel rules" },
@@ -95,6 +95,7 @@ export function mountLobby(): HTMLElement {
         h("li", null, "場札と完全に同じカードは、手番でなくてもカットインで出せます。"),
         h("li", null, "ドロー2・ドロー4は重ねて次の人に回せます。引いた直後はドボンできません。"),
       ),
+      versionFoot(),
     ),
   );
   return root;
@@ -117,9 +118,5 @@ export function updateLobby() {
   text(startBtn, onlinePlayers < 2 ? "あと1人以上必要" : "ゲームを始める");
   show(waitEl, !host);
   text(roleBtn, v.role === "player" ? "観戦に回る" : "参加する");
-  const sig = JSON.stringify(v.stats);
-  if (sig !== statsSig) {
-    statsSig = sig;
-    replace(statsBox, statsTable(v.stats, v.you));
-  }
+  stats.update();
 }

@@ -3,7 +3,8 @@ import { colorName } from "../../shared/cards.js";
 import { type EventView, type RoomView, STAMPS } from "../../shared/protocol.js";
 import * as fx from "../fx.js";
 import { nameOf } from "../store.js";
-import { DOBON_LABELS, where } from "./game.js";
+import { where } from "./game.js";
+import { dobonLabel } from "./labels.js";
 
 export interface Pre {
   seats: Map<string, DOMRect>;
@@ -133,7 +134,7 @@ export function playEvents(pre: Pre, ev: EventView[], prev: RoomView | null, cur
         break;
       case "dobon": {
         const n = e.n;
-        const label = DOBON_LABELS[n - 1] ?? `${n}人ドボン`;
+        const label = dobonLabel(n);
         const sub = `${nameOf(e.by)} → ${e.target ? nameOf(e.target) : "初期場札"}`;
         fx.flash(n >= 3 ? "rainbow" : n === 2 ? "gold" : "red");
         fx.shake(true);

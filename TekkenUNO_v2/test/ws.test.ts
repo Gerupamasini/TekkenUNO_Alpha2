@@ -82,6 +82,9 @@ test("HTTP：index.html を圧縮して返す・/healthz", async () => {
   assert.match(r.headers.get("content-type")!, /text\/html/);
   const h = await fetch(`http://127.0.0.1:${port}/healthz`);
   assert.equal(await h.text(), "ok");
+  const v = await (await fetch(`http://127.0.0.1:${port}/version`)).json();
+  assert.equal(typeof v.version, "string");
+  assert.equal(typeof v.build, "string");
   const notFound = await fetch(`http://127.0.0.1:${port}/assets/nope.js`);
   assert.equal(notFound.status, 404);
   const trav = await fetch(`http://127.0.0.1:${port}/..%2f..%2fpackage.json`);

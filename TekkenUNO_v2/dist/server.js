@@ -338,19 +338,24 @@ function dobon(g, by, ctx) {
   if (g.noDobon.includes(by)) return fail("\u30AB\u30FC\u30C9\u3092\u5F15\u3044\u305F\u76F4\u5F8C\u306F\u30C9\u30DC\u30F3\u3067\u304D\u307E\u305B\u3093");
   if (pts !== g.lastPlay.points) return fail("\u30C9\u30DC\u30F3\u4E0D\u6210\u7ACB");
   const events = [];
+  let drew = null;
   if (g.pendingDraw > 0) {
     const receiver = currentId(g);
     const n = g.pendingDraw;
-    drawCards(g, receiver, n, ctx, events);
     g.pendingDraw = 0;
-    markDrew(g, receiver);
-    events.push({ e: "draw", by: receiver, n, why: "dobon" });
+    if (receiver !== by) {
+      drawCards(g, receiver, n, ctx, events);
+      markDrew(g, receiver);
+      events.push({ e: "draw", by: receiver, n, why: "dobon" });
+      drew = { id: receiver, n };
+    }
   }
   g.windowOpen = false;
   const r = {
     targetId: g.lastPlay.by,
     dobonBy: [by],
     returnBy: null,
+    drew,
     tablePoints: g.lastPlay.points,
     deadline: ctx.now + RESULT_WINDOW_MS,
     final: false,
@@ -382,6 +387,7 @@ function computeScores(g, r) {
       if (id === r.returnBy) {
         row.mark = "DOBON_RETURN";
         row.finalScore = 0;
+        row.dobonCount = 1;
       } else if (r.dobonBy.includes(id)) {
         row.mark = "BEDOBON_RETURN";
         row.finalScore = hp * 2;
@@ -576,7 +582,10 @@ var Lobby = class {
   attach(client, room, member) {
     member.clients.add(client);
     if (member.clients.size === 1) this.setOnline(room, member, true);
-    client.send({ t: "state", s: this.view(room, member, this.stats(room)), ev: [] });
+    const s = this.view(room, member, this.stats(room));
+    s.matches = this.matches(room);
+    member.histSent = room.histRev;
+    client.send({ t: "state", s, ev: [] });
   }
   setOnline(room, member, online) {
     const t = this.now();
@@ -627,7 +636,8 @@ var Lobby = class {
       joinedAt: t,
       clients: /* @__PURE__ */ new Set(),
       offlineSince: null,
-      lastStamp: 0
+      lastStamp: 0,
+      histSent: -1
     };
     room.members.set(member.id, member);
     room.names.set(member.id, member.name);
@@ -636,6 +646,7 @@ var Lobby = class {
     if (person !== member.id) room.person.set(member.id, person);
     room.back.set(token, { person, name: member.name });
     this.tokenIndex.set(token, { key: room.key, memberId: member.id });
+    room.histRev++;
     if (!room.hostId || !room.members.has(room.hostId)) room.hostId = member.id;
     room.emptySince = null;
     this.addLog(room, `${member.name}\u304C\u5165\u5BA4\u3057\u307E\u3057\u305F${role === "spectator" ? "\uFF08\u89B3\u6226\uFF09" : ""}`);
@@ -660,7 +671,8 @@ var Lobby = class {
       events: [],
       dirty: true,
       emptySince: null,
-      gameCount: 0
+      gameCount: 0,
+      histRev: 0
     };
     this.rooms.set(key, room);
     return room;
@@ -683,6 +695,7 @@ var Lobby = class {
   }
   removeMember(room, member, why) {
     room.members.delete(member.id);
+    room.histRev++;
     this.tokenIndex.delete(member.token);
     for (const c of member.clients) c.send({ t: "out", why });
     member.clients.clear();
@@ -719,6 +732,7 @@ var Lobby = class {
     this.addLog(room, `${member.name}\u304C\u540D\u524D\u3092${name}\u306B\u5909\u3048\u307E\u3057\u305F`);
     member.name = name;
     room.names.set(member.id, name);
+    room.histRev++;
     const b = room.back.get(member.token);
     if (b) b.name = name;
     room.dirty = true;
@@ -865,8 +879,22 @@ var Lobby = class {
     room.history.push({
       no: g.gameNo,
       at: this.now(),
-      rows: r.scores.map((s) => ({ id: s.id, score: s.finalScore, mark: s.mark, dobon: s.dobonCount, bedobon: s.bedobonCount }))
+      pts: r.tablePoints,
+      target: r.targetId,
+      by: r.dobonBy.slice(),
+      ret: r.returnBy,
+      rows: r.scores.map((s) => ({
+        id: s.id,
+        hand: s.handPoints,
+        score: s.finalScore,
+        mark: s.mark,
+        zero: s.zero,
+        drew: r.drew?.id === s.id ? r.drew.n : 0,
+        dobon: s.dobonCount,
+        bedobon: s.bedobonCount
+      }))
     });
+    room.histRev++;
   }
   // ------------------------------------------------------------------ 時間の処理
   tick() {
@@ -899,9 +927,16 @@ var Lobby = class {
     const ev = room.events;
     room.events = [];
     room.dirty = false;
+    let matches = null;
     for (const m of room.members.values()) {
       if (m.clients.size === 0) continue;
-      const msg = { t: "state", s: this.view(room, m, stats), ev };
+      const s = this.view(room, m, stats);
+      if (m.histSent !== room.histRev) {
+        matches ??= this.matches(room);
+        s.matches = matches;
+        m.histSent = room.histRev;
+      }
+      const msg = { t: "state", s, ev };
       for (const c of m.clients) c.send(msg);
     }
   }
@@ -963,13 +998,38 @@ var Lobby = class {
           hand: s.handPoints,
           score: s.finalScore,
           mark: s.mark,
-          zero: s.zero
+          zero: s.zero,
+          drew: r.drew?.id === s.id ? r.drew.n : 0
         }))
       } : null
     };
   }
   personOf(room, id) {
     return room.person.get(id) ?? id;
+  }
+  /** 人（入り直しても同じ）→ 今いるメンバーの id */
+  currentIds(room) {
+    const out = /* @__PURE__ */ new Map();
+    for (const m of room.members.values()) out.set(this.personOf(room, m.id), m.id);
+    return out;
+  }
+  /** 試合別の成績（新しい順）。今いる人は今の id と名前で出す */
+  matches(room) {
+    const cur = this.currentIds(room);
+    const idOf = (id) => cur.get(this.personOf(room, id)) ?? id;
+    const opt = (id) => id ? idOf(id) : null;
+    return room.history.map((rec) => ({
+      no: rec.no,
+      at: rec.at,
+      pts: rec.pts,
+      target: opt(rec.target),
+      by: rec.by.map(idOf),
+      ret: opt(rec.ret),
+      rows: rec.rows.map((x) => {
+        const id = idOf(x.id);
+        return { id, name: this.nameOf(room, id), hand: x.hand, score: x.score, mark: x.mark, zero: x.zero, drew: x.drew };
+      })
+    })).reverse();
   }
   /** 成績。入り直した人（同じ端末・同じ名前）は1行にまとめ、いまの名前で出す */
   stats(room) {
@@ -1240,7 +1300,8 @@ Sec-WebSocket-Accept: ${accept}\r
 }
 
 // src/server/app.ts
-var BUILD = true ? "20260923155809" : "dev";
+var BUILD = true ? "20260923165137" : "dev";
+var VERSION = true ? "2.2.0" : "dev";
 var here = path.dirname(fileURLToPath(import.meta.url));
 var DEFAULT_CLIENT_DIR = existsSync(path.join(here, "client")) ? path.join(here, "client") : path.resolve(here, "../../dist/client");
 var TYPES = {
@@ -1295,6 +1356,11 @@ function startServer(opts) {
       if (url.pathname === "/healthz") {
         res.writeHead(200, { "content-type": "text/plain", "cache-control": "no-store" });
         res.end("ok");
+        return;
+      }
+      if (url.pathname === "/version") {
+        res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+        res.end(JSON.stringify({ version: VERSION, build: BUILD }));
         return;
       }
       if (req.method !== "GET" && req.method !== "HEAD") {
@@ -1397,7 +1463,7 @@ function startServer(opts) {
 // src/server/index.ts
 var app = startServer({ port: Number(process.env.PORT ?? 1e4), clientDir: process.env.CLIENT_DIR });
 app.ready.then((port) => {
-  console.log(`\u9244\u7814UNO server ${BUILD} listening on :${port}`);
+  console.log(`\u9244\u7814UNO server v${VERSION} (build ${BUILD}) listening on :${port}`);
 });
 function shutdown() {
   app.close().then(() => process.exit(0));

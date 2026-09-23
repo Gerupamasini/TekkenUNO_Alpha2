@@ -7,6 +7,7 @@ import {
   type EventView,
   type GameView,
   type LogLine,
+  type MatchView,
   type MemberView,
   type RoomView,
   type ServerMsg,
@@ -43,12 +44,19 @@ interface Member {
   clients: Set<Client>;
   offlineSince: number | null;
   lastStamp: number;
+  /** 最後に送った試合記録の版（room.histRev）。違えば次の送信で試合記録を付ける */
+  histSent: number;
 }
 
 interface MatchRecord {
   no: number;
   at: number;
-  rows: { id: string; score: number; mark: E.Mark; dobon: number; bedobon: number }[];
+  /** 場札点 */
+  pts: number;
+  target: string | null;
+  by: string[];
+  ret: string | null;
+  rows: { id: string; hand: number; score: number; mark: E.Mark; zero: boolean; drew: number; dobon: number; bedobon: number }[];
 }
 
 interface Room {
@@ -71,6 +79,8 @@ interface Room {
   dirty: boolean;
   emptySince: number | null;
   gameCount: number;
+  /** 試合記録（と、そこに出る名前）が変わるたびに増やす */
+  histRev: number;
 }
 
 export interface LobbyOptions {
@@ -214,7 +224,11 @@ export class Lobby {
   private attach(client: Client, room: Room, member: Member) {
     member.clients.add(client);
     if (member.clients.size === 1) this.setOnline(room, member, true);
-    client.send({ t: "state", s: this.view(room, member, this.stats(room)), ev: [] });
+    // つないだ直後は試合記録も必ず付ける
+    const s = this.view(room, member, this.stats(room));
+    s.matches = this.matches(room);
+    member.histSent = room.histRev;
+    client.send({ t: "state", s, ev: [] });
   }
 
   private setOnline(room: Room, member: Member, online: boolean) {
@@ -269,6 +283,7 @@ export class Lobby {
       clients: new Set(),
       offlineSince: null,
       lastStamp: 0,
+      histSent: -1,
     };
     room.members.set(member.id, member);
     room.names.set(member.id, member.name);
@@ -278,6 +293,7 @@ export class Lobby {
     if (person !== member.id) room.person.set(member.id, person);
     room.back.set(token, { person, name: member.name });
     this.tokenIndex.set(token, { key: room.key, memberId: member.id });
+    room.histRev++;
     if (!room.hostId || !room.members.has(room.hostId)) room.hostId = member.id;
     room.emptySince = null;
     this.addLog(room, `${member.name}が入室しました${role === "spectator" ? "（観戦）" : ""}`);
@@ -304,6 +320,7 @@ export class Lobby {
       dirty: true,
       emptySince: null,
       gameCount: 0,
+      histRev: 0,
     };
     this.rooms.set(key, room);
     return room;
@@ -330,6 +347,7 @@ export class Lobby {
 
   private removeMember(room: Room, member: Member, why: "left" | "kicked") {
     room.members.delete(member.id);
+    room.histRev++;
     this.tokenIndex.delete(member.token);
     for (const c of member.clients) c.send({ t: "out", why });
     member.clients.clear();
@@ -370,6 +388,7 @@ export class Lobby {
     this.addLog(room, `${member.name}が名前を${name}に変えました`);
     member.name = name;
     room.names.set(member.id, name);
+    room.histRev++;
     const b = room.back.get(member.token);
     if (b) b.name = name;
     room.dirty = true;
@@ -535,8 +554,22 @@ export class Lobby {
     room.history.push({
       no: g.gameNo,
       at: this.now(),
-      rows: r.scores.map((s) => ({ id: s.id, score: s.finalScore, mark: s.mark, dobon: s.dobonCount, bedobon: s.bedobonCount })),
+      pts: r.tablePoints,
+      target: r.targetId,
+      by: r.dobonBy.slice(),
+      ret: r.returnBy,
+      rows: r.scores.map((s) => ({
+        id: s.id,
+        hand: s.handPoints,
+        score: s.finalScore,
+        mark: s.mark,
+        zero: s.zero,
+        drew: r.drew?.id === s.id ? r.drew.n : 0,
+        dobon: s.dobonCount,
+        bedobon: s.bedobonCount,
+      })),
     });
+    room.histRev++;
   }
 
   // ------------------------------------------------------------------ 時間の処理
@@ -573,9 +606,17 @@ export class Lobby {
     const ev = room.events;
     room.events = [];
     room.dirty = false;
+    let matches: MatchView[] | null = null;
     for (const m of room.members.values()) {
       if (m.clients.size === 0) continue;
-      const msg: ServerMsg = { t: "state", s: this.view(room, m, stats), ev };
+      const s = this.view(room, m, stats);
+      if (m.histSent !== room.histRev) {
+        // 試合記録は変わったときだけ送る（毎回送ると重いので）
+        matches ??= this.matches(room);
+        s.matches = matches;
+        m.histSent = room.histRev;
+      }
+      const msg: ServerMsg = { t: "state", s, ev };
       for (const c of m.clients) c.send(msg);
     }
   }
@@ -645,6 +686,7 @@ export class Lobby {
               score: s.finalScore,
               mark: s.mark,
               zero: s.zero,
+              drew: r.drew?.id === s.id ? r.drew.n : 0,
             })),
           }
         : null,
@@ -653,6 +695,34 @@ export class Lobby {
 
   private personOf(room: Room, id: string): string {
     return room.person.get(id) ?? id;
+  }
+
+  /** 人（入り直しても同じ）→ 今いるメンバーの id */
+  private currentIds(room: Room): Map<string, string> {
+    const out = new Map<string, string>();
+    for (const m of room.members.values()) out.set(this.personOf(room, m.id), m.id);
+    return out;
+  }
+
+  /** 試合別の成績（新しい順）。今いる人は今の id と名前で出す */
+  private matches(room: Room): MatchView[] {
+    const cur = this.currentIds(room);
+    const idOf = (id: string) => cur.get(this.personOf(room, id)) ?? id;
+    const opt = (id: string | null) => (id ? idOf(id) : null);
+    return room.history
+      .map((rec) => ({
+        no: rec.no,
+        at: rec.at,
+        pts: rec.pts,
+        target: opt(rec.target),
+        by: rec.by.map(idOf),
+        ret: opt(rec.ret),
+        rows: rec.rows.map((x) => {
+          const id = idOf(x.id);
+          return { id, name: this.nameOf(room, id), hand: x.hand, score: x.score, mark: x.mark, zero: x.zero, drew: x.drew };
+        }),
+      }))
+      .reverse();
   }
 
   /** 成績。入り直した人（同じ端末・同じ名前）は1行にまとめ、いまの名前で出す */

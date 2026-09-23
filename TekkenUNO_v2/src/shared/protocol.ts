@@ -67,6 +67,8 @@ export interface ResultRow {
   score: number;
   mark: Mark;
   zero: boolean;
+  /** ドボンが決まったときに累積を引いた枚数（引いていなければ0） */
+  drew: number;
 }
 
 export interface ResultView {
@@ -114,6 +116,29 @@ export interface StatRow {
   bedobon: number;
 }
 
+/** 試合ごとの記録（成績の「試合別」） */
+export interface MatchRow {
+  /** 今いる人なら今の id（自分の行を見分けるため）。いなければ試合のときの id */
+  id: string;
+  name: string;
+  hand: number;
+  score: number;
+  mark: Mark;
+  zero: boolean;
+  drew: number;
+}
+export interface MatchView {
+  no: number;
+  at: number;
+  /** 場札点 */
+  pts: number;
+  /** 被ドボン者・ドボンした人・ドボン返しした人（rows の id） */
+  target: string | null;
+  by: string[];
+  ret: string | null;
+  rows: MatchRow[];
+}
+
 export interface LogLine {
   t: number;
   m: string;
@@ -129,5 +154,7 @@ export interface RoomView {
   game: GameView | null;
   stats: StatRow[];
   games: number;
+  /** 試合ごとの記録。変わったとき（と接続した直後）だけ付けて送る */
+  matches?: MatchView[];
   log: LogLine[];
 }

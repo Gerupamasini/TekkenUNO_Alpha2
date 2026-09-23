@@ -9,7 +9,10 @@ import { type Client, Lobby } from "./rooms.js";
 import { type WsConn, acceptUpgrade } from "./ws.js";
 
 declare const __BUILD_ID__: string | undefined;
+declare const __APP_VERSION__: string | undefined;
 export const BUILD = typeof __BUILD_ID__ === "string" ? __BUILD_ID__ : "dev";
+/** package.json のバージョン（ビルドで埋め込む。開発中は "dev"） */
+export const VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "dev";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CLIENT_DIR = existsSync(path.join(here, "client")) ? path.join(here, "client") : path.resolve(here, "../../dist/client");
@@ -87,6 +90,12 @@ export function startServer(opts: ServerOptions) {
       if (url.pathname === "/healthz") {
         res.writeHead(200, { "content-type": "text/plain", "cache-control": "no-store" });
         res.end("ok");
+        return;
+      }
+      if (url.pathname === "/version") {
+        // 公開中のバージョンの確認用
+        res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+        res.end(JSON.stringify({ version: VERSION, build: BUILD }));
         return;
       }
       if (req.method !== "GET" && req.method !== "HEAD") {

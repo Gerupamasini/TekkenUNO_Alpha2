@@ -220,7 +220,89 @@ function forceDobon(lobby: Lobby, cs: FakeClient[], opts: { ret?: boolean } = {}
   return { target, dobonerId };
 }
 
-test("ドボン返しの成績：返した人はドボン0、返された人は被ドボン1", () => {
+/** 最後に届いた試合記録（試合記録は変わったときだけ付いてくる） */
+function lastMatches(c: FakeClient) {
+  for (let i = c.inbox.length - 1; i >= 0; i--) {
+    const m = c.inbox[i];
+    if (m.t === "state" && m.s.matches) return m.s.matches;
+  }
+  return null;
+}
+const matchMsgs = (c: FakeClient) => c.inbox.filter((m) => m.t === "state" && m.s.matches).length;
+
+test("試合別の記録：確定した試合だけを新しい順に。場札点・誰が誰に・手札点・得点・印", () => {
+  const { lobby, cs } = roomWith(3);
+  assert.deepEqual(lastMatches(cs[0]), [], "入った直後は空の記録が届く");
+  send(lobby, cs[0], { t: "start" });
+  const g1 = forceDobon(lobby, cs);
+  let m = lastMatches(cs[1])!;
+  assert.equal(m.length, 1);
+  assert.equal(m[0].no, 1);
+  assert.equal(m[0].pts, 7);
+  assert.equal(m[0].target, g1.target);
+  assert.deepEqual(m[0].by, [g1.dobonerId]);
+  assert.equal(m[0].ret, null);
+  const row = (id: string) => m[0].rows.find((r) => r.id === id)!;
+  assert.deepEqual([row(g1.dobonerId).hand, row(g1.dobonerId).score, row(g1.dobonerId).mark], [7, 0, "DOBON"]);
+  assert.equal(row(g1.target).mark, "BEDOBON");
+  assert.equal(row(g1.target).score, row(g1.target).hand * 2);
+  // 次の試合：確定するまでは記録に出ない
+  send(lobby, cs[0], { t: "next" });
+  send(lobby, cs[0], { t: "start" });
+  assert.equal(lastMatches(cs[1])!.length, 1);
+  const g2 = forceDobon(lobby, cs, { ret: true });
+  m = lastMatches(cs[1])!;
+  assert.equal(m.length, 2);
+  assert.equal(m[0].no, 2, "新しい順");
+  assert.equal(m[0].ret, g2.target);
+  assert.equal(m[0].rows.find((r) => r.id === g2.target)!.mark, "DOBON_RETURN");
+  assert.equal(m[0].rows.find((r) => r.id === g2.dobonerId)!.score, 14);
+});
+
+test("試合記録は変わったときとつないだ直後だけ送る。名前を変えたら送り直す", () => {
+  const { lobby, cs } = roomWith(3);
+  send(lobby, cs[0], { t: "start" });
+  forceDobon(lobby, cs);
+  const before = matchMsgs(cs[1]);
+  send(lobby, cs[0], { t: "stamp", s: 0 });
+  send(lobby, cs[0], { t: "next" });
+  assert.equal(matchMsgs(cs[1]), before, "関係ない更新では送らない");
+  send(lobby, cs[2], { t: "name", name: "新しい名前" });
+  assert.equal(matchMsgs(cs[1]), before + 1);
+  const id2 = cs[2].state!.you;
+  assert.equal(lastMatches(cs[1])![0].rows.find((r) => r.id === id2)!.name, "新しい名前");
+  // 再接続（同じ鍵）では最初の状態に試合記録が付く
+  const again = connect(lobby, cs[1].token!);
+  assert.equal(lastMatches(again)!.length, 1);
+});
+
+test("ドボンで累積を引いた人は、結果と試合記録に枚数が残る", () => {
+  const { lobby, cs } = roomWith(3);
+  send(lobby, cs[0], { t: "start" });
+  const room = [...lobby.rooms.values()][0];
+  const g = room.game!;
+  const [target, receiver, doboner] = g.seats;
+  const d2 = { id: "d2x", type: "DRAW2" as const, color: "R" as const };
+  g.discard.push(d2);
+  g.lastPlay = { by: target, cards: [d2], points: 20, seq: g.lastPlay.seq + 1, cutin: false };
+  g.turn = 1;
+  g.pendingDraw = 2;
+  g.windowOpen = true;
+  g.noDobon = [];
+  g.hands[doboner] = [{ id: "sk", type: "SKIP", color: "G" }];
+  const who = (id: string) => cs.find((c) => c.state?.you === id)!;
+  const handBefore = g.hands[receiver].length;
+  send(lobby, who(doboner), { t: "dobon" });
+  assert.equal(g.hands[receiver].length, handBefore + 2);
+  const rv = cs[0].state!.game!.result!;
+  assert.equal(rv.rows.find((r) => r.id === receiver)!.drew, 2);
+  assert.equal(rv.rows.find((r) => r.id === doboner)!.drew, 0);
+  clock += 10_001;
+  lobby.tick();
+  assert.equal(lastMatches(cs[0])![0].rows.find((r) => r.id === receiver)!.drew, 2);
+});
+
+test("ドボン返しの成績：返した人はドボン1、返された人は被ドボン1", () => {
   const { lobby, cs } = roomWith(3);
   send(lobby, cs[0], { t: "start" });
   const { target, dobonerId } = forceDobon(lobby, cs, { ret: true });
@@ -228,7 +310,7 @@ test("ドボン返しの成績：返した人はドボン0、返された人は�
   assert.equal(st.game!.result!.ret, target);
   assert.equal(st.games, 1);
   const row = (id: string) => st.stats.find((s) => s.id === id)!;
-  assert.deepEqual([row(target).dobon, row(target).bedobon, row(target).total], [0, 0, 0]);
+  assert.deepEqual([row(target).dobon, row(target).bedobon, row(target).total], [1, 0, 0]);
   assert.deepEqual([row(dobonerId).dobon, row(dobonerId).bedobon, row(dobonerId).total], [0, 1, 14]);
 });
 

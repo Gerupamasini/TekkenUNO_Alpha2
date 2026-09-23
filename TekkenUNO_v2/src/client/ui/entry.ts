@@ -4,6 +4,7 @@ import { h, show, text } from "../dom.js";
 import { join, savedName } from "../net.js";
 import { S } from "../store.js";
 import { toast } from "./common.js";
+import { versionFoot } from "./version.js";
 
 let root: HTMLElement | null = null;
 let statusEl: HTMLElement;
@@ -74,6 +75,7 @@ export function mountEntry(): HTMLElement {
         h("div", { class: "row" }, joinBtn, watchBtn),
       ),
       statusEl,
+      versionFoot(),
     ),
   );
   return root;

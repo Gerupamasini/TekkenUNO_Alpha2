@@ -17,9 +17,8 @@ import * as fx from "../fx.js";
 import { send } from "../net.js";
 import { S, changed, currentTurnId, game, isHost, me, myTurn, nameOf, seated, serverNow, topCard } from "../store.js";
 import { modal, pickColor } from "./common.js";
-import { statsTable } from "./stats.js";
-
-export const DOBON_LABELS = ["ドボン", "ダブロン", "トリロン", "クアドロン", "クインドロン", "セクスロン", "セプトロン", "オクトロン", "ノナロン"];
+import { dobonLabel, drewNote, markText } from "./labels.js";
+import { openStats } from "./stats.js";
 
 let root: HTMLElement | null = null;
 let tableEl: HTMLElement;
@@ -474,21 +473,6 @@ function fitHand() {
 // ---------------------------------------------------------------- 結果
 
 let resultSig = "";
-function markText(mark: string, n: number, zero: boolean): string {
-  switch (mark) {
-    case "DOBON":
-      return "★ドボン";
-    case "BEDOBON":
-      return "◎".repeat(Math.max(1, n)) + "被ドボン";
-    case "DOBON_RETURN":
-      return "★ドボン返し";
-    case "BEDOBON_RETURN":
-      return "◎返された";
-    default:
-      return zero ? "0点！" : "";
-  }
-}
-
 function renderResult() {
   const g = game()!;
   const r = g.result;
@@ -505,7 +489,7 @@ function renderResult() {
   const first = !resultSig.startsWith(JSON.stringify([g.no]).slice(0, -1));
   resultSig = sig;
   const n = r.by.length;
-  const title = r.ret ? "ドボン返し!!" : `${DOBON_LABELS[n - 1] ?? `${n}人ドボン`}!!`;
+  const title = r.ret ? "ドボン返し!!" : `${dobonLabel(n)}!!`;
   const sub = r.ret
     ? `${nameOf(r.ret)} → ${r.by.map(nameOf).join("・")}`
     : `${r.by.map(nameOf).join("・")} → ${r.target ? nameOf(r.target) : "初期場札（被ドボンなし）"}`;
@@ -518,7 +502,7 @@ function renderResult() {
         "tr",
         { class: `${row.id === me() ? "me " : ""}m-${row.mark}${row.zero ? " zero" : ""}` },
         h("td", { class: "name" }, row.name),
-        h("td", null, String(row.hand)),
+        h("td", { class: "hand-pts" }, String(row.hand), row.drew ? h("small", { class: "drew", title: "ドボンが決まったときに累積を引いた" }, drewNote(row.drew)) : null),
         scoreCell,
         h("td", { class: "mark" }, markText(row.mark, n, row.zero)),
       ),
@@ -545,15 +529,7 @@ function renderResult() {
   const ret = h("button", { class: "btn act dobon ret", type: "button", onclick: () => send({ t: "ret" }) }, "ドボン返し！");
   const dob = h("button", { class: "btn act dobon", type: "button", onclick: () => send({ t: "dobon" }) }, "ドボン！（追加）");
   const next = h("button", { class: "btn primary", type: "button", onclick: () => send({ t: "next" }) }, "次のゲームへ");
-  const stats = h(
-    "button",
-    {
-      class: "btn ghost",
-      type: "button",
-      onclick: () => modal("成績（このルーム）", statsTable(S.view!.stats, me()), { wide: true }),
-    },
-    "成績",
-  );
+  const stats = h("button", { class: "btn ghost", type: "button", onclick: openStats }, "成績");
   btns.append(ret, dob, next, stats);
   updateResultButtons();
 }

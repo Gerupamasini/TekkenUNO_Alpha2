@@ -34,6 +34,7 @@ initNet({
   state(view, ev) {
     const prev = S.view;
     const pre = capture(ev, view.you);
+    if (view.matches) S.matches = view.matches;
     S.view = view;
     renderNow();
     playEvents(pre, ev, prev, view);
@@ -42,6 +43,7 @@ initNet({
     toast(m, "err");
   },
   out(why) {
+    S.matches = [];
     if (why === "kicked") {
       S.notice = "ホストにキックされたため、部屋から出ました。";
       toast("ホストにキックされました", "err", 4000);

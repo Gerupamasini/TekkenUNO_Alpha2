@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { context } from "esbuild";
+import { defines } from "./meta.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, "dist/client");
@@ -20,7 +21,7 @@ const ctx = await context({
   format: "iife",
   outdir: path.join(out, "assets"),
   entryNames: "[name]",
-  define: { __BUILD_ID__: JSON.stringify("dev") },
+  define: defines(root, "dev"),
   logLevel: "info",
 });
 await ctx.watch();

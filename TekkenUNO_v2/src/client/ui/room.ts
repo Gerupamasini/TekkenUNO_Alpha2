@@ -6,7 +6,9 @@ import { S, isHost, seated } from "../store.js";
 import { confirmBox, copyText, modal, promptBox, toast } from "./common.js";
 import { mountBoard, stopBoard, updateBoard } from "./game.js";
 import { confirmKick, mountLobby, updateLobby } from "./lobby.js";
-import { statsTable } from "./stats.js";
+import { openStats } from "./stats.js";
+import { openVersion } from "./version.js";
+import { VERSION } from "../version.js";
 
 let root: HTMLElement | null = null;
 let mainEl: HTMLElement;
@@ -18,10 +20,6 @@ let mode: "lobby" | "board" | null = null;
 
 function inviteUrl(): string {
   return `${location.origin}/#${encodeURIComponent(S.view?.key ?? "")}`;
-}
-
-function openStats() {
-  modal("成績（このルーム）", statsTable(S.view?.stats ?? [], S.view?.you ?? null), { wide: true });
 }
 
 function openLog() {
@@ -95,6 +93,7 @@ function openMenu() {
   if (v.phase === "LOBBY") item(v.role === "player" ? "観戦に回る" : "参加する", () => send({ t: "role", spectate: v.role === "player" }));
   if (v.role === "spectator" && v.phase !== "LOBBY") item(me?.queued ? "参加予約をやめる" : "次のゲームから参加", () => send({ t: "queue", on: !me?.queued }));
   item("ログを見る", openLog);
+  item(`バージョン・更新内容（v${VERSION}）`, openVersion);
   if (isHost() && v.phase !== "LOBBY") item("メンバーをキック", openKick);
   if (isHost() && inGame)
     item(

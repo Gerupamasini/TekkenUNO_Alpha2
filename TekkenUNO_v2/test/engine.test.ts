@@ -413,7 +413,45 @@ test("ドロー札へのドボン：受ける人が先に引き、その人は�
   assert.equal(g.hands.P1.length, 3, "累積2枚を先に引く");
   assert.equal(handPoints(g.hands.P1), 20);
   assert.ok(g.noDobon.includes("P1"));
+  assert.deepEqual(g.result!.drew, { id: "P1", n: 2 }, "誰が何枚引いたかを残す");
   ng(act(g, "P1", { type: "dobon" }, ctx()), /引いた直後/);
+});
+test("ドロー札へのドボン：受ける人自身がドボンしたら引かない（手札点＝場札点のまま）", () => {
+  const g = setup(4, C("DRAW2", "R"));
+  const d = give(g, "P0", C("DRAW2", "R"), N("G", 1), N("B", 2))[0];
+  ok(playIds(g, "P0", [d]));
+  assert.equal(g.pendingDraw, 2);
+  give(g, "P1", N("Y", 9), N("R", 8), N("G", 3)); // 20点。P1 が累積を受ける人
+  const deckBefore = g.deck.length;
+  const ev = ok(act(g, "P1", { type: "dobon" }, ctx()));
+  assert.equal(g.hands.P1.length, 3, "引かない");
+  assert.equal(g.deck.length, deckBefore);
+  assert.ok(!ev.some((e) => e.e === "draw"));
+  assert.equal(g.pendingDraw, 0, "累積は消える");
+  const r = g.result!;
+  assert.equal(r.drew, null);
+  const row = (id: string) => r.scores.find((x) => x.id === id)!;
+  assert.equal(row("P1").handPoints, 20, "ドボンした人の手札点は場札点のまま");
+  assert.equal(row("P1").finalScore, 0);
+  assert.equal(row("P0").finalScore, 3 * 2);
+  // ほかの人は追加ドボンできる
+  give(g, "P2", C("SKIP", "B"));
+  ok(act(g, "P2", { type: "dobon" }, ctx()));
+  assert.equal(row("P0").finalScore, 3 * 4, "ダブロンで×4");
+});
+test("ドロー札へのドボン：受ける人がドボン→返されたら、場札点×2（累積分は入らない）", () => {
+  const g = setup(3, C("DRAW2", "R"));
+  const d = give(g, "P0", C("DRAW2", "R"), C("REVERSE", "G"))[0];
+  ok(playIds(g, "P0", [d]));
+  give(g, "P1", C("SKIP", "Y")); // 20点
+  ok(act(g, "P1", { type: "dobon" }, ctx()));
+  ok(act(g, "P0", { type: "dobonReturn" }, ctx())); // P0 の残りは REVERSE で20点
+  const r = g.result!;
+  const row = (id: string) => r.scores.find((x) => x.id === id)!;
+  assert.equal(row("P1").finalScore, 40);
+  assert.equal(row("P1").mark, "BEDOBON_RETURN");
+  assert.deepEqual([row("P0").dobonCount, row("P0").bedobonCount, row("P0").finalScore], [1, 0, 0]);
+  assert.deepEqual([row("P1").dobonCount, row("P1").bedobonCount], [0, 1]);
 });
 test("ダブロン：10秒以内の追加ドボンで×4、組ごとに数える。締切後は不可、tickで確定", () => {
   const g = setup(4);
@@ -447,7 +485,7 @@ test("ドボン返し：被ドボン者だけ、成立で即確定、元のド�
   assert.equal(r.final, true);
   const row = (id: string) => r.scores.find((s) => s.id === id)!;
   assert.equal(row("P0").finalScore, 0);
-  assert.equal(row("P0").dobonCount, 0, "返した人はドボン数に数えない");
+  assert.equal(row("P0").dobonCount, 1, "返した人はドボン1（ダブロンを返しても1）");
   assert.equal(row("P0").bedobonCount, 0);
   assert.equal(row("P2").finalScore, 14);
   assert.equal(row("P3").finalScore, 14);
@@ -539,12 +577,12 @@ test("山札切れ：場札以外を切り直し、それでも足りなけれ�
   assert.equal(new Set(all).size, all.length, "追加セットでもidは重複しない");
 });
 
-test("computeScores：ドボン返しの成績は、返した人0・返された人はそれぞれ被ドボン1", () => {
+test("computeScores：ドボン返しの成績は、返した人ドボン1・返された人はそれぞれ被ドボン1", () => {
   const g = setup(3);
-  const r = { targetId: "P0", dobonBy: ["P1", "P2"], returnBy: "P0", tablePoints: 5, deadline: 0, final: true, scores: [] };
+  const r = { targetId: "P0", dobonBy: ["P1", "P2"], returnBy: "P0", drew: null, tablePoints: 5, deadline: 0, final: true, scores: [] };
   const rows = computeScores(g, r);
   const row = (id: string) => rows.find((x) => x.id === id)!;
-  assert.deepEqual([row("P0").dobonCount, row("P0").bedobonCount], [0, 0]);
+  assert.deepEqual([row("P0").dobonCount, row("P0").bedobonCount], [1, 0]);
   assert.deepEqual([row("P1").dobonCount, row("P1").bedobonCount], [0, 1]);
   assert.deepEqual([row("P2").dobonCount, row("P2").bedobonCount], [0, 1]);
 });

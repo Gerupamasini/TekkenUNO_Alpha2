@@ -47,6 +47,8 @@ export interface ResultState {
   targetId: string | null;
   dobonBy: string[];
   returnBy: string | null;
+  /** ドボンが決まったときに累積を引いた人と枚数（10章。なければ null） */
+  drew: { id: string; n: number } | null;
   tablePoints: number;
   deadline: number;
   final: boolean;
@@ -382,20 +384,26 @@ function dobon(g: GameState, by: string, ctx: Ctx): ActResult {
   if (pts !== g.lastPlay.points) return fail("ドボン不成立");
 
   const events: GameEvent[] = [];
-  // ドロー札で累積が残っていれば、受けるはずだった人が先に引く（10章）
+  // ドロー札で累積が残っていれば、受けるはずだった人が先に引いてから点数を計算する（10章）。
+  // ただし受けるはずだった人自身がドボンしたときは引かない（上がりなので累積は消える）
+  let drew: ResultState["drew"] = null;
   if (g.pendingDraw > 0) {
     const receiver = currentId(g);
     const n = g.pendingDraw;
-    drawCards(g, receiver, n, ctx, events);
     g.pendingDraw = 0;
-    markDrew(g, receiver);
-    events.push({ e: "draw", by: receiver, n, why: "dobon" });
+    if (receiver !== by) {
+      drawCards(g, receiver, n, ctx, events);
+      markDrew(g, receiver);
+      events.push({ e: "draw", by: receiver, n, why: "dobon" });
+      drew = { id: receiver, n };
+    }
   }
   g.windowOpen = false;
   const r: ResultState = {
     targetId: g.lastPlay.by,
     dobonBy: [by],
     returnBy: null,
+    drew,
     tablePoints: g.lastPlay.points,
     deadline: ctx.now + RESULT_WINDOW_MS,
     final: false,
@@ -427,10 +435,11 @@ export function computeScores(g: GameState, r: ResultState): ScoreRow[] {
     const hp = handPoints(g.hands[id]);
     const row: ScoreRow = { id, handPoints: hp, finalScore: hp, mark: "NORMAL", zero: false, dobonCount: 0, bedobonCount: 0 };
     if (r.returnBy) {
-      // ドボン返し：返した人はドボン数に数えない（0）。返された元のドボン者はそれぞれ被ドボン1
+      // ドボン返し：返した人はドボン1（返した相手の人数によらず1つ）。返された元のドボン者はそれぞれ被ドボン1
       if (id === r.returnBy) {
         row.mark = "DOBON_RETURN";
         row.finalScore = 0;
+        row.dobonCount = 1;
       } else if (r.dobonBy.includes(id)) {
         row.mark = "BEDOBON_RETURN";
         row.finalScore = hp * 2;

@@ -4,12 +4,14 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { FAVICON } from "./favicon.mjs";
+import { defines, readMeta } from "./meta.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, "dist");
 const buildId =
   (process.env.RENDER_GIT_COMMIT || "").slice(0, 8) || new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
-const define = { __BUILD_ID__: JSON.stringify(buildId) };
+const define = defines(root, buildId);
+const { version } = readMeta(root);
 
 
 rmSync(out, { recursive: true, force: true });
@@ -47,4 +49,4 @@ await build({
 });
 
 const size = (f) => `${(Object.values(client.metafile.outputs).find((o, i) => files[i].endsWith(f))?.bytes / 1024).toFixed(1)}KB`;
-console.log(`build ${buildId}: client ${js} (${size(".js")}), ${css} (${size(".css")}) / server dist/server.js`);
+console.log(`build v${version} (${buildId}): client ${js} (${size(".js")}), ${css} (${size(".css")}) / server dist/server.js`);

@@ -1,9 +1,7 @@
 // サーバーとの接続。切れたら自動でつなぎ直し、同じ席に戻る
 import type { ClientMsg, EventView, RoomView, ServerMsg } from "../shared/protocol.js";
 import { S, changed } from "./store.js";
-
-declare const __BUILD_ID__: string;
-const BUILD = typeof __BUILD_ID__ === "string" ? __BUILD_ID__ : "dev";
+import { BUILD } from "./version.js";
 
 const TOKEN_KEY = "tekkenuno.token";
 const ROOM_KEY = "tekkenuno.room";

@@ -1,6 +1,6 @@
 // 画面側の状態（サーバーから来た表示データ＋手元の操作状態）
 import type { Card } from "../shared/cards.js";
-import type { GameView, RoomView } from "../shared/protocol.js";
+import type { GameView, MatchView, RoomView } from "../shared/protocol.js";
 
 export type ConnState = "connecting" | "open" | "closed";
 
@@ -10,6 +10,8 @@ export const S = {
   slow: false,
   offset: 0,
   view: null as RoomView | null,
+  /** 試合別の成績（サーバーは変わったときだけ送ってくるので、ここに残しておく） */
+  matches: [] as MatchView[],
   /** 重ね出しモード */
   stackMode: false,
   selected: [] as string[],
@@ -67,8 +69,13 @@ export function nameOf(id: string | null): string {
 let scheduled = false;
 const listeners: (() => void)[] = [];
 
-export function onChange(fn: () => void) {
+/** 描き直しのたびに呼ぶ関数を登録する。戻り値を呼ぶと登録を外す */
+export function onChange(fn: () => void): () => void {
   listeners.push(fn);
+  return () => {
+    const i = listeners.indexOf(fn);
+    if (i >= 0) listeners.splice(i, 1);
+  };
 }
 
 /** 次の描画フレームでまとめて描き直す */
@@ -77,12 +84,12 @@ export function changed() {
   scheduled = true;
   requestAnimationFrame(() => {
     scheduled = false;
-    for (const fn of listeners) fn();
+    for (const fn of [...listeners]) fn();
   });
 }
 
 /** すぐ描き直す（受信直後にアニメーションの位置を合わせるため） */
 export function renderNow() {
   scheduled = false;
-  for (const fn of listeners) fn();
+  for (const fn of [...listeners]) fn();
 }

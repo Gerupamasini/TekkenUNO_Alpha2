@@ -423,6 +423,113 @@ tr.me td {
   background: rgba(120, 190, 255, 0.08);
 }
 
+/* 成績：通算／試合別の切り替え */
+.seg {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--line);
+}
+.seg-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 9px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.seg-btn.on {
+  background: var(--panel2);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.stats-note {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #ffe98a;
+  background: rgba(255, 212, 0, 0.08);
+  border: 1px solid rgba(255, 212, 0, 0.25);
+}
+.matches {
+  display: grid;
+  gap: 10px;
+}
+.match {
+  min-width: 0;
+  padding: 10px 12px 4px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--danger);
+}
+.match.k-multi {
+  border-left-color: var(--accent);
+}
+.match.k-ret {
+  border-left-color: #b98cff;
+}
+.match-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.match-no {
+  font-size: 15px;
+}
+.match-kind {
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffb3c0;
+}
+.match.k-multi .match-kind {
+  color: var(--accent);
+}
+.match.k-ret .match-kind {
+  color: #cdb2ff;
+}
+.match-time {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.match-sub {
+  margin: 2px 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+table.match-table {
+  font-size: 13px;
+}
+table.match-table th,
+table.match-table td {
+  padding: 5px 6px;
+}
+table.match-table td.score {
+  font-size: 15px;
+}
+table.match-table tr:last-child td {
+  border-bottom: 0;
+}
+td.hand-pts small.drew {
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffb36b;
+}
+
 /* ---------------------------------------------------------------- ゲーム画面の骨組み */
 .board {
   position: relative;
@@ -1881,4 +1988,51 @@ ol.log time {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ---------------------------------------------------------------- バージョン */
+.version-foot {
+  margin: 14px 0 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.version-no {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.link-btn {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  font: inherit;
+  color: #9fd0ff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.version-info .version-line {
+  margin: 0 0 12px;
+}
+.version-info .version-line small {
+  color: var(--muted);
+}
+.version-info .change h3 {
+  margin: 14px 0 4px;
+  font-size: 15px;
+}
+.version-info .change h3 small {
+  color: var(--muted);
+  font-weight: 600;
+}
+.version-info .change ul {
+  margin: 0;
+  padding-left: 1.2em;
+  line-height: 1.7;
+  font-size: 14px;
+  color: #d5dbf2;
 }
