@@ -54,6 +54,14 @@ function corner(c: Card): string {
   }
 }
 
+/**
+ * 差分更新（keyed）で使うキー。id だけでなく見た目も含める。
+ * 要素を使い回すのは「同じ id で同じ絵」のときだけにして、前のカードの絵が残らないようにする
+ */
+export function cardKey(c: Card): string {
+  return `${c.id}:${c.type}:${c.color ?? "X"}:${c.value ?? ""}`;
+}
+
 /** カード1枚の要素 */
 export function cardEl(c: Card | null, extra = ""): HTMLElement {
   if (!c) {

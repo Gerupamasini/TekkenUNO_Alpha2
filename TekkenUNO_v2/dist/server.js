@@ -116,9 +116,9 @@ function shuffle(a, rng) {
   }
   return a;
 }
-function newSet(setNo, rng) {
+function newSet(gameNo, setNo, rng) {
   const cards = shuffle(makeCardSet(), rng);
-  return cards.map((c, i) => ({ ...c, id: `${setNo}-${i}` }));
+  return cards.map((c, i) => ({ ...c, id: `${gameNo}-${setNo}-${i}` }));
 }
 function currentId(g) {
   return g.seats[g.turn];
@@ -145,7 +145,7 @@ function refillDeck(g, ctx, events) {
     return;
   }
   g.sets += 1;
-  g.deck = newSet(g.sets, ctx.rng);
+  g.deck = newSet(g.gameNo, g.sets, ctx.rng);
   events.push({ e: "reshuffle", added: true });
 }
 function drawCards(g, playerId, n, ctx, events) {
@@ -161,7 +161,7 @@ function markDrew(g, playerId) {
 function createGame(playerIds, gameNo, ctx) {
   if (playerIds.length < 2) throw new Error("\u53C2\u52A0\u8005\u304C2\u4EBA\u4EE5\u4E0A\u5FC5\u8981\u3067\u3059");
   const seats = shuffle(playerIds.slice(), ctx.rng);
-  const deck = newSet(1, ctx.rng);
+  const deck = newSet(gameNo, 1, ctx.rng);
   const hands = {};
   for (const id of seats) hands[id] = [];
   for (let r = 0; r < HAND_SIZE; r++) {
@@ -1240,7 +1240,7 @@ Sec-WebSocket-Accept: ${accept}\r
 }
 
 // src/server/app.ts
-var BUILD = true ? "20260923103101" : "dev";
+var BUILD = true ? "20260923155809" : "dev";
 var here = path.dirname(fileURLToPath(import.meta.url));
 var DEFAULT_CLIENT_DIR = existsSync(path.join(here, "client")) ? path.join(here, "client") : path.resolve(here, "../../dist/client");
 var TYPES = {

@@ -116,6 +116,17 @@ test("開始：7枚ずつ・初期場札1枚・山札の残り", () => {
   assert.equal(ids.size, 108, "カードidは重複しない");
 });
 
+test("カードidはゲームごとに別（同じidが前のゲームの別のカードを指さない）", () => {
+  const all = (g: GameState) => [...g.deck, ...g.discard, ...Object.values(g.hands).flat()].map((c) => c.id);
+  const g1 = createGame(["a", "b"], 1, ctx({ rng: mulberry32(11) })).game;
+  const g2 = createGame(["a", "b"], 2, ctx({ rng: mulberry32(12) })).game;
+  const ids1 = new Set(all(g1));
+  assert.ok(!all(g2).some((id) => ids1.has(id)), "1試合目と2試合目でidが重ならない");
+  // 配られる手札のidも重ならない（前はここが毎回同じ範囲になっていた）
+  const hand1 = new Set(Object.values(g1.hands).flat().map((c) => c.id));
+  assert.ok(!Object.values(g2.hands).flat().some((c) => hand1.has(c.id)));
+});
+
 function gameWithFirst(type: CardType) {
   for (let seed = 1; seed < 20000; seed++) {
     const rng = mulberry32(seed);

@@ -114,9 +114,14 @@ function shuffle<T>(a: T[], rng: () => number): T[] {
   return a;
 }
 
-function newSet(setNo: number, rng: () => number): Card[] {
+/**
+ * 1セットを切って id を振る。id は「ゲーム番号-セット番号-山札での位置」。
+ * ゲーム番号を入れるのは、同じ id が前のゲームの別のカードを指さないようにするため
+ * （画面は id でカードの要素を使い回すので、同じ id が別のカードになると前の絵が残る）
+ */
+function newSet(gameNo: number, setNo: number, rng: () => number): Card[] {
   const cards = shuffle(makeCardSet(), rng);
-  return cards.map((c, i) => ({ ...c, id: `${setNo}-${i}` }));
+  return cards.map((c, i) => ({ ...c, id: `${gameNo}-${setNo}-${i}` }));
 }
 
 export function currentId(g: GameState): string {
@@ -149,7 +154,7 @@ function refillDeck(g: GameState, ctx: Ctx, events: GameEvent[]) {
     return;
   }
   g.sets += 1;
-  g.deck = newSet(g.sets, ctx.rng);
+  g.deck = newSet(g.gameNo, g.sets, ctx.rng);
   events.push({ e: "reshuffle", added: true });
 }
 
@@ -171,7 +176,7 @@ function markDrew(g: GameState, playerId: string) {
 export function createGame(playerIds: string[], gameNo: number, ctx: Ctx): { game: GameState; events: GameEvent[] } {
   if (playerIds.length < 2) throw new Error("参加者が2人以上必要です");
   const seats = shuffle(playerIds.slice(), ctx.rng);
-  const deck = newSet(1, ctx.rng);
+  const deck = newSet(gameNo, 1, ctx.rng);
   const hands: Record<string, Card[]> = {};
   for (const id of seats) hands[id] = [];
   for (let r = 0; r < HAND_SIZE; r++) {

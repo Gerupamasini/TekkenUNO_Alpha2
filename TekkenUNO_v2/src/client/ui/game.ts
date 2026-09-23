@@ -11,7 +11,7 @@ import {
   sameValueOrEffect,
 } from "../../shared/cards.js";
 import { STAMPS, type SeatView } from "../../shared/protocol.js";
-import { cardEl } from "../cardview.js";
+import { cardEl, cardKey } from "../cardview.js";
 import { cls, h, keyed, rectOf, replace, show, text } from "../dom.js";
 import * as fx from "../fx.js";
 import { send } from "../net.js";
@@ -43,6 +43,8 @@ let actionsEl: HTMLElement;
 let handWrap: HTMLElement;
 let handEl: HTMLElement;
 let resultEl: HTMLElement;
+/** いま表示しているゲーム（部屋・自分・ゲーム番号）。変わったら手札と場札を作り直す */
+let boardSig = "";
 const B = {} as Record<"draw" | "pass" | "dobon" | "stack" | "play" | "stamp" | "queue", HTMLButtonElement>;
 
 // ---------------------------------------------------------------- 手札の並びと選択
@@ -352,7 +354,7 @@ function renderCenter() {
   const g = game()!;
   text(deckCount, String(g.deck));
   const n = g.stack.length;
-  keyed(fanEl, g.stack, (c) => c.id, (c) => cardEl(c, "fan-card"), (el, _c, i) => {
+  keyed(fanEl, g.stack, cardKey, (c) => cardEl(c, "fan-card"), (el, _c, i) => {
     el.style.setProperty("--i", String(i - (n - 1)));
     el.style.zIndex = String(10 + i);
   });
@@ -436,7 +438,7 @@ function renderHand() {
   }
   const sorted = sortHand(hand);
   const mine = myTurn();
-  keyed(handEl, sorted, (c) => c.id, (c) => cardEl(c, "hand-card"), (el, c) => {
+  keyed(handEl, sorted, cardKey, (c) => cardEl(c, "hand-card"), (el, c) => {
     const ok = selectable(c, hand);
     const cutin = !mine && ok;
     cls(el, "playable", ok);
@@ -601,6 +603,13 @@ function tickTimer() {
 export function updateBoard() {
   const g = game();
   if (!root || !g) return;
+  // 新しいゲーム（または別の部屋）になったら、前のゲームのカードの要素を残さない
+  const sig = `${S.view!.key}|${S.view!.you}|${g.no}`;
+  if (sig !== boardSig) {
+    boardSig = sig;
+    handEl.replaceChildren();
+    fanEl.replaceChildren();
+  }
   const top = topCard();
   const key = `${g.no}|${g.turn}|${top?.id}|${g.pending}|${!!g.result}`;
   if (key !== S.turnKey) {

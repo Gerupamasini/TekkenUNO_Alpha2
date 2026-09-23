@@ -37,7 +37,7 @@ function later(ms: number, fn: () => void) {
 function hideUntil(container: Element | null, ids: string[], ms: number) {
   if (!container) return;
   ids.forEach((id, i) => {
-    const el = container.querySelector(`[data-key="${CSS.escape(id)}"]`);
+    const el = container.querySelector(`[data-id="${CSS.escape(id)}"]`);
     if (!el) return;
     el.classList.add("incoming");
     setTimeout(() => {
